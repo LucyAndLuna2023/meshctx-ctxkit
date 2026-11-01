@@ -67,10 +67,11 @@ echo "==> 5/5 release artifact"
 ls -lh dist/
 
 if [[ $UPLOAD -eq 1 ]]; then
-  echo "==> uploading to PyPI"
-  python3 -m pip install --quiet twine
-  python3 -m twine upload dist/*.whl
-  echo "==> live at https://pypi.org/project/${PKG}/"
+  # Delegates to tools/publish_pypi.sh, which reads the token from an env var
+  # only — never from argv, never from a file. A token on the command line
+  # shows up in `ps` and in shell history; that is how the parent project's
+  # credentials ended up in a public git log.
+  ./tools/publish_pypi.sh
 else
   echo
   echo "Dry run complete. To publish:"
