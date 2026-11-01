@@ -76,27 +76,71 @@ jobs:
 
       - name: Paid licence must activate on a clean install
         run: |
+          # Two things this step must get right:
+          #
+          # 1. Import the INSTALLED wheel, not src/. Setting PYTHONPATH=src
+          #    here would re-test the source tree and prove nothing — which is
+          #    exactly the failure mode that let a broken paid tier ship.
+          # 2. Use a throwaway keypair via CTXKIT_LICENSE_PUBKEY, because the
+          #    public key baked into the package belongs to the (private)
+          #    billing service and cannot be used to sign a test licence.
           TARGET=$(mktemp -d)
           python -m pip install --target "$TARGET" --no-deps dist/*.whl
-          python -m pip install --target "$TARGET" "pyjwt[crypto]"
-          # generate a throwaway keypair and sign a licence with it
-          python - <<'PY'
+          python -m pip install --target "$TARGET" --upgrade "pyjwt[crypto]"
+
+          PYTHONPATH="$TARGET" PYTHONNOUSERSITE=1 python -S - <<'PY'
+          import os, tempfile
+          from pathlib import Path
           from cryptography.hazmat.primitives import serialization
           from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+          import meshctx_ctxkit.license as L
+
           k = Ed25519PrivateKey.generate()
-          priv = k.private_bytes(encoding=serialization.Encoding.PEM,
-                                 format=serialization.PrivateFormat.PKCS8,
-                                 encryption_algorithm=serialization.NoEncryption()).decode()
-          pub = k.public_key().public_bytes(encoding=serialization.Encoding.PEM,
+          priv = k.private_bytes(
+              encoding=serialization.Encoding.PEM,
+              format=serialization.PrivateFormat.PKCS8,
+              encryption_algorithm=serialization.NoEncryption()).decode()
+          pub = k.public_key().public_bytes(
+              encoding=serialization.Encoding.PEM,
               format=serialization.PublicFormat.SubjectPublicKeyInfo).decode()
-          open("priv.pem","w").write(priv); open("pub.pem","w").write(pub)
+
+          tok = L.sign_license(priv, tier="pro", email="ci@test", days=1)
+
+          # (a) verify with the throwaway public key
+          lic = L.verify_license(tok, pub)
+          assert lic.tier == "pro", f"expected pro, got {lic.tier}: {lic.reason}"
+          assert lic.active, lic.reason
+
+          # (b) load it from disk the way a real user stores it.
+          #     CTXKIT_HOME *is* the data directory (same place as memory.jsonl).
+          home = tempfile.mkdtemp()
+          Path(home, "license.key").write_text(tok)
+          os.environ["CTXKIT_HOME"] = home
+          os.environ["CTXKIT_LICENSE_PUBKEY"] = pub
+          lic2 = L.load_license_from_env()
+          assert lic2.tier == "pro" and lic2.active, lic2.reason
+          print("paid licence activates on clean install (installed wheel)")
           PY
-          PYTHONPATH=src python - <<'PY'
+
+      - name: A licence signed by another key must be rejected
+        run: |
+          TARGET=$(mktemp -d)
+          python -m pip install --target "$TARGET" --no-deps dist/*.whl
+          python -m pip install --target "$TARGET" --upgrade "pyjwt[crypto]"
+          PYTHONPATH="$TARGET" PYTHONNOUSERSITE=1 python -S - <<'PY'
+          from cryptography.hazmat.primitives import serialization
+          from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
           from meshctx_ctxkit.license import sign_license, verify_license
-          tok = sign_license(open("priv.pem").read(), tier="pro", email="ci@test", days=1)
-          lic = verify_license(tok, open("pub.pem").read())
-          assert lic.tier == "pro" and lic.active, lic.reason
-          print("paid licence activates on clean install")
+
+          rogue = Ed25519PrivateKey.generate()
+          priv = rogue.private_bytes(
+              encoding=serialization.Encoding.PEM,
+              format=serialization.PrivateFormat.PKCS8,
+              encryption_algorithm=serialization.NoEncryption()).decode()
+          forged = sign_license(priv, tier="team", email="evil@x", days=9999)
+          lic = verify_license(forged)   # uses the package's baked-in key
+          assert lic.tier == "free", "a token signed by another key must not grant a tier"
+          print("rogue-signed licence correctly rejected")
           PY
 
       - name: Must not shadow the unrelated PyPI `ctxkit` package

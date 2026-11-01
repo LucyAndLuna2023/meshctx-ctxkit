@@ -213,3 +213,59 @@ class TestGatedServer:
         srv = self._srv(tmp_path, License(tier="free"))
         r = srv.handle({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
         assert len(r["result"]["tools"]) == 7
+
+
+class TestPublicKeyOverride:
+    """Regression: the public-key override used to be resolved at import time,
+    so exporting CTXKIT_LICENSE_PUBKEY after import silently did nothing."""
+
+    def test_env_override_applies_after_import(self, monkeypatch):
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+        import meshctx_ctxkit.license as L
+
+        k = Ed25519PrivateKey.generate()
+        priv = k.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()).decode()
+        pub = k.public_key().public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo).decode()
+
+        tok = L.sign_license(priv, tier="pro", email="env@test", days=1)
+
+        # Without the override the built-in key rejects it.
+        assert L.verify_license(tok).tier == "free"
+
+        # Setting the env var AFTER the module is imported must take effect.
+        monkeypatch.setenv("CTXKIT_LICENSE_PUBKEY", pub)
+        lic = L.verify_license(tok)
+        assert lic.tier == "pro", lic.reason
+        assert lic.active
+
+    def test_license_key_file_in_ctxkit_home(self, monkeypatch, tmp_path):
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+        import meshctx_ctxkit.license as L
+
+        k = Ed25519PrivateKey.generate()
+        priv = k.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()).decode()
+        pub = k.public_key().public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo).decode()
+        tok = L.sign_license(priv, tier="pro", email="file@test", days=1)
+
+        # CTXKIT_HOME *is* the data directory — license.key sits next to
+        # memory.jsonl, the same way ~/.ctxkit does.
+        (tmp_path / "license.key").write_text(tok)
+        monkeypatch.setenv("CTXKIT_HOME", str(tmp_path))
+        monkeypatch.setenv("CTXKIT_LICENSE_PUBKEY", pub)
+        monkeypatch.delenv("CTXKIT_LICENSE", raising=False)
+
+        lic = L.load_license_from_env()
+        assert lic.tier == "pro", lic.reason
+        assert lic.active

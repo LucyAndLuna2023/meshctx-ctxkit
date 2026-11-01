@@ -26,9 +26,26 @@ Tier = Literal["free", "pro", "team"]
 # Public key shipped with the client. Replace with the real one when the
 # Stripe setup is live (see billing/README.md). The placeholder is refused
 # explicitly rather than silently trusting anything.
-PUBLIC_KEY_PEM = os.environ.get("CTXKIT_LICENSE_PUBKEY") or """-----BEGIN PUBLIC KEY-----
+# The public key baked into the package at build time. This is the key the
+# billing service signs licences with.
+BUILTIN_PUBLIC_KEY = """-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEAsnFCGUPdXj1osPhWOsdxNj8ngmaMciTksQP2h86hmw8=
 -----END PUBLIC KEY-----"""
+
+
+def _resolve_public_key() -> str:
+    """Return the public key to verify against.
+
+    Reads ``CTXKIT_LICENSE_PUBKEY`` at *call* time rather than import time.
+    Resolving it at import made the override silently useless for anyone who
+    exported the variable after the module was already imported (e.g. from a
+    test or a wrapper script) — the override looked supported but did nothing.
+    """
+    return os.environ.get("CTXKIT_LICENSE_PUBKEY") or BUILTIN_PUBLIC_KEY
+
+
+# Kept for backwards compatibility with anything importing the old name.
+PUBLIC_KEY_PEM = BUILTIN_PUBLIC_KEY
 
 _PLACEHOLDER = "PLACEHOLDER_REPLACE_ME"
 
@@ -94,7 +111,7 @@ def verify_license(token: str | None, public_key: str | None = None,
         return License(tier="free", reason=(
                 "licence verification needs PyJWT: "
                 "pip install 'meshctx-ctxkit[license]'"))
-    key = public_key or PUBLIC_KEY_PEM
+    key = public_key or _resolve_public_key()
     if _PLACEHOLDER in key:
         return License(tier="free",
                        reason="license public key not configured in this build")
