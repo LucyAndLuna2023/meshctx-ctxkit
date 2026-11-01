@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "meshctx-ctxkit"
+version = "0.1.0"
+description = "Local-first context kit for agents: memory that survives restarts + verified multi-model consensus. Runs fully offline, zero login, zero API spend."
+readme = "README.md"
+requires-python = ">=3.10"
+# PEP 639 string form (the `{text = ...}` table form is deprecated and will
+# break in a future setuptools).
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [{ name = "MeshCtx / LucyAndLuna2023" }]
+keywords = ["mcp", "agent", "memory", "llm", "consensus", "local-first", "offline"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = []
+
+[project.optional-dependencies]
+# Audit finding 3.2: the paid license needs PyJWT *and* cryptography.
+# Previously neither was declared, so a paying user on a clean install got
+# "tier: free" with a confusing reason. Extras are now explicit:
+#
+#   pip install meshctx-ctxkit              -> free tools only, zero deps
+#   pip install 'meshctx-ctxkit[license]'   -> licence verification
+#   pip install 'meshctx-ctxkit[api]'       -> consensus + licence
+#   pip install 'meshctx-ctxkit[all]'       -> everything
+license = ["pyjwt[crypto]>=2.8"]
+api = ["httpx>=0.25", "pyjwt[crypto]>=2.8"]
+all = ["httpx>=0.25", "pyjwt[crypto]>=2.8"]
+dev = ["pytest>=7", "httpx>=0.25", "pyjwt[crypto]>=2.8"]
+
+[project.urls]
+Homepage = "https://github.com/LucyAndLuna2023/meshctx-ctxkit"
+Repository = "https://github.com/LucyAndLuna2023/meshctx-ctxkit"
+Source = "https://github.com/LucyAndLuna2023/meshctx-ctxkit"
+Changelog = "https://github.com/LucyAndLuna2023/meshctx-ctxkit/blob/main/CHANGELOG.md"
+Security = "https://github.com/LucyAndLuna2023/meshctx-ctxkit/blob/main/SECURITY.md"
+Issues = "https://github.com/LucyAndLuna2023/meshctx-ctxkit/issues"
+
+[project.scripts]
+# Audit finding 3.1: the unrelated `ctxkit` package on PyPI ALSO ships a
+# top-level `ctxkit/` module and a `ctxkit` console script. Two packages
+# providing the same import path and the same command cannot coexist in one
+# environment — installing both silently overwrites files and entry points.
+# So this package owns a unique import name, a unique command, and a unique
+# distribution name:
+#   distribution : meshctx-ctxkit
+#   import       : meshctx_ctxkit
+#   command      : meshctx-ctxkit
+meshctx-ctxkit = "meshctx_ctxkit.__main__:main"
+mctxkit = "meshctx_ctxkit.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+meshctx_ctxkit = ["py.typed"]
