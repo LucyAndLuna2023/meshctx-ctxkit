@@ -173,12 +173,36 @@ class TestGatedServer:
                         "params": {"name": name, "arguments": args}})
         return json.loads(r["result"]["content"][0]["text"])
 
-    def test_free_tier_consensus_denied(self, tmp_path):
+    def test_consensus_is_free_since_20261103(self, tmp_path, monkeypatch):
+        """ctx_consensus is no longer paywalled (2026-11-03).
+
+        It spends the user's own API budget, so charging for it would be
+        charging for nothing. The remaining quota is an abuse guard, not a
+        paywall — verify a free-tier user gets through it.
+        """
+        monkeypatch.delenv("CTXKIT_CONSENSUS_FREE_QUOTA", raising=False)
         srv = self._srv(tmp_path, License(tier="free", reason="no token"))
-        out = self._call(srv, "ctx_consensus", {"question": "x", "models": ["a", "b"]})
+        out = self._call(srv, "ctx_consensus", {"question": "x", "models": ["only-one"]})
+        # one model cannot produce a consensus report, but the call must NOT be
+        # rejected for licensing reasons
+        assert "paid license" not in json.dumps(out)
+        assert srv.meter.used() >= 1, "free-tier call should have been counted"
+
+    def test_abuse_guard_blocks_at_quota(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("CTXKIT_CONSENSUS_FREE_QUOTA", "2")
+        srv = self._srv(tmp_path, License(tier="free"))
+        for _ in range(2):
+            srv.meter.check_and_consume(2)
+        out = self._call(srv, "ctx_consensus", {"question": "q", "models": ["a"]})
         assert out["ok"] is False
-        assert "paid license" in out["error"]
-        assert out["tier"] == "free"
+        assert "abuse guard" in out["error"]
+        assert "paywall" in out["error"]
+
+    def test_abuse_guard_can_be_disabled(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("CTXKIT_CONSENSUS_FREE_QUOTA", "0")
+        srv = self._srv(tmp_path, License(tier="free"))
+        out = self._call(srv, "ctx_consensus", {"question": "q", "models": ["a"]})
+        assert "limit reached" not in json.dumps(out)
 
     def test_free_tier_memory_still_works(self, tmp_path):
         srv = self._srv(tmp_path, License(tier="free"))
@@ -194,13 +218,12 @@ class TestGatedServer:
         # only 1 model → consensus reports error, but the call was counted
         assert srv.meter.used() == 1
 
-    def test_quota_exhausted_message(self, tmp_path):
-        lic = License(tier="pro", email="p@q.r", exp=int(time.time()) + 999)
-        srv = self._srv(tmp_path, lic)
-        for _ in range(lic.consensus_quota):
-            srv.meter.check_and_consume(lic.consensus_quota)
+    def test_quota_exhausted_message(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("CTXKIT_CONSENSUS_FREE_QUOTA", "1")
+        srv = self._srv(tmp_path, License(tier="free"))
+        srv.meter.check_and_consume(1)
         out = self._call(srv, "ctx_consensus", {"question": "q", "models": ["a"]})
-        assert out["ok"] is False and "quota" in out["error"]
+        assert out["ok"] is False and "abuse guard" in out["error"]
 
     def test_license_tool_reports_tier(self, tmp_path):
         lic = License(tier="team", email="t@co", exp=int(time.time()) + 999)

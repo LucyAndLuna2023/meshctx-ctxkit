@@ -71,10 +71,18 @@ be wrong. It narrows where to look; it does not establish truth.
 Requires `CTXKIT_API_KEY` + `CTXKIT_API_BASE`. Nowhere near as scary as it
 sounds — it's an OpenAI-compatible endpoint and works with any provider.
 
-## Tiers
+## Pricing
 
-| | **Free** | **Pro $9/mo** |
-|---|---|---|
+**Everything is free.** Since 2026-11-03 there is no paywall.
+
+`ctx_consensus` spends *your* API budget (you supply `CTXKIT_API_KEY`), not
+ours, so charging for it would be charging for nothing. The only limit is a
+local abuse guard to stop a runaway loop burning your API credit — you can
+raise or remove it with `CTXKIT_CONSENSUS_FREE_QUOTA`.
+
+See `PRICING.md` for the full reasoning.
+
+---|---|---|
 | `ctx_remember` / `ctx_recall` / `ctx_forget` | ✅ unlimited | ✅ |
 | `ctx_verify_text` | ✅ unlimited | ✅ |
 | `ctx_stats` / `ctx_license` | ✅ | ✅ |

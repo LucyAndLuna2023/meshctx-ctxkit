@@ -79,38 +79,49 @@ class CtxKitServer:
         question = args.get("question", "").strip()
         if not question:
             return json.dumps({"ok": False, "error": "question required"})
-        lic = self.license
-        if not lic.active:
-            return json.dumps({
-                "ok": False,
-                "error": "ctx_consensus requires a paid license",
-                "tier": lic.tier,
-                "detail": lic.reason,
-                "upgrade": "https://github.com/LucyAndLuna2023/meshctx#pricing",
-                "note": "ctx_remember / ctx_recall / ctx_verify_text stay free forever",
-            }, ensure_ascii=False)
-        allowed, used = self.meter.check_and_consume(lic.consensus_quota)
-        if not allowed:
-            return json.dumps({
-                "ok": False,
-                "error": f"monthly consensus quota reached "
-                         f"({used}/{lic.consensus_quota} on {lic.tier})",
-                "resets": "1st of next month (UTC)",
-            }, ensure_ascii=False)
+        # ── Free since 2026-11-03 ────────────────────────────────────────
+        # ctx_consensus is no longer gated behind a licence.
+        #
+        # Why: this call spends the *user's* API budget (they supply
+        # CTXKIT_API_KEY), not ours. Our marginal cost is $0, so charging for
+        # it would be charging for nothing — and the only thing we could
+        # enforce was a local JSON counter the user can delete.
+        #
+        # The quota below is therefore not a paywall. It is an abuse guard so
+        # a runaway loop cannot burn someone's own API budget unattended.
+        # Set CTXKIT_CONSENSUS_FREE_QUOTA=0 to disable it entirely.
+        free_quota = int(os.environ.get("CTXKIT_CONSENSUS_FREE_QUOTA", "2000"))
+        if free_quota > 0:
+            allowed, used = self.meter.check_and_consume(free_quota)
+            if not allowed:
+                return json.dumps({
+                    "ok": False,
+                    "error": f"monthly consensus call limit reached "
+                             f"({used}/{free_quota}). This is an abuse guard, "
+                             f"not a paywall — raise CTXKIT_CONSENSUS_FREE_QUOTA "
+                             f"or pass 0 to disable.",
+                    "resets": "1st of next month (UTC)",
+                }, ensure_ascii=False)
+        else:
+            used, _ = 0, None
         models = args.get("models") or _env_models() or DEFAULT_MODELS
         try:
             report = multi_model_consensus(question, models,
                                            timeout=float(args.get("timeout", 120)))
         except Exception as e:
             return json.dumps({"ok": False, "error": str(e)[:300]})
-        report["quota"] = {"used": used, "limit": lic.consensus_quota, "tier": lic.tier}
+        report["quota"] = {"used": used, "limit": free_quota, "kind": "abuse_guard"}
         return json.dumps({"ok": True, **report}, ensure_ascii=False)
 
     def tool_license(self, args: dict[str, Any]) -> str:  # noqa: ARG002
         lic = self.license.to_dict()
         lic["usage"] = self.meter.snapshot()
+        lic["note"] = ("All tools are free since 2026-11-03. A licence is only "
+                       "needed for the optional multi-model consensus feature "
+                       "if its abuse guard is hit; raise "
+                       "CTXKIT_CONSENSUS_FREE_QUOTA to avoid that.")
         lic["free_tools"] = ["ctx_remember", "ctx_recall", "ctx_forget",
-                             "ctx_stats", "ctx_verify_text"]
+                             "ctx_stats", "ctx_verify_text", "ctx_consensus"]
         return json.dumps({"ok": True, **lic}, ensure_ascii=False)
 
     # ── MCP protocol surface ───────────────────────────────────────────

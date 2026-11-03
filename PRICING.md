@@ -1,77 +1,56 @@
 # meshctx-ctxkit — Pricing
 
-> **Status: NOT READY FOR SALE.** Team tier is withdrawn (audit 4.3).
-> Pro is deferred until the billing service passes the deployment checklist.
-> See `../AUDIT_REMEDIATION.md` for what must be true before money changes hands.
+> **Everything is free.** Since 2026-11-03, no feature is behind a paywall.
 
-## What is actually built
+## Why it is free
 
-| Capability | Status |
-|---|---|
-| Local memory (`ctx_remember` / `ctx_recall` / `ctx_forget`) | ✅ shipped |
-| Offline output verification (`ctx_verify_text`) | ✅ shipped |
-| Multi-model consensus (`ctx_consensus`) | ✅ code works, **gated behind a licence** |
-| Licence verification | ✅ shipped (`[license]` extra) |
-| Stripe billing service | ⚠️ code complete, **not deployed, not audited for live** |
-| Team seat management | ❌ **does not exist** |
-| Managed API keys | ❌ **does not exist** |
-| Support SLA | ❌ **not offered** |
+`ctx_consensus` spends **the user's** API budget — you supply `CTXKIT_API_KEY`,
+and the calls happen on your machine. Our marginal cost per user is **$0**.
 
-## Tiers (current, honest)
+Charging for it would have meant selling a local JSON counter that any user
+could delete. That is not a subscription; it is a toll booth on a road we did
+not build.
 
-| | **Free** | **Pro** |
+So: free. All of it.
+
+## What you get
+
+| Tool | What it does | Cost |
 |---|---|---|
-| Price | $0 forever | **$9/mo** (proposed — see below) |
-| `ctx_remember` / `ctx_recall` / `ctx_forget` | ✅ unlimited | ✅ |
-| `ctx_verify_text` | ✅ unlimited | ✅ |
-| `ctx_stats` / `ctx_license` | ✅ | ✅ |
-| `ctx_consensus` | — | ✅ 300/mo, **bring your own API key** |
-| Runtime dependencies | **zero** | `pyjwt[crypto]` + `httpx` |
-| Support | community | best-effort email, no SLA |
+| `ctx_remember` | Store a durable local memory | free |
+| `ctx_recall` | BM25 retrieval (CJK-aware, offline) | free |
+| `ctx_forget` | Delete a memory | free |
+| `ctx_stats` | Store statistics | free |
+| `ctx_verify_text` | Offline arithmetic / date / absolute-claim checks | free |
+| `ctx_consensus` | Multi-model agreement scoring | free (you pay your model provider) |
+| `ctx_license` | Show usage and limits | free |
 
-### Why $9 and not $19
+## The one limit, and why it exists
 
-The audit is right about this: **Pro does not spend our money.**
+`ctx_consensus` counts calls locally and stops at **2,000/month by default**.
 
-- The user supplies `CTXKIT_API_KEY`; model calls happen locally.
-- Our marginal cost per Pro user is **$0**.
-- The usage counter is a local JSON file the user can delete.
+This is **not a paywall**. It is an abuse guard: a runaway loop should not
+silently burn through someone's API budget overnight. It is:
 
-So $19/mo was priced against a cost we do not bear, and against a control
-we cannot enforce. That is not a business model, it is a paywall.
+- local only (no server, no phone-home, no account)
+- resettable by you
+- removable: set `CTXKIT_CONSENSUS_FREE_QUOTA=0` to disable it entirely
 
-**$9/mo is priced as what it actually is:** an unlock fee for a paid tool,
-plus the funding that keeps the free tier maintained. If we ever build a
-hosted API (where we *do* pay for model calls), the pricing changes and so
-does the work required to justify it.
+If you hit it, the error message tells you exactly how to raise it.
 
-## Withdrawn
+## If we ever charge for something
 
-| Item | Why |
-|---|---|
-| **Team $79/mo** | Promised managed keys + 5 seats + 24h support. None of it exists. Selling it would be misrepresentation. |
-| **Managed API keys** | No key storage, rotation, revocation, or per-seat accounting. |
-| **24h support SLA** | No on-call. Never promise an SLA you are not staffed for. |
-| **Hosted API pricing narrative** | The product is BYOK. There is no hosted tier. |
+It will be for something we actually pay for:
 
-## If we later build a hosted tier, it requires
+- hosted consensus (we supply the model keys)
+- server-side team memory sharing
+- compliance/audit reports delivered as documents
 
-1. Server-side key custody (secrets manager, not env vars in a repo)
-2. Server-side metering and rate limiting (the local counter cannot be the
-   basis for billing)
-3. Per-request audit trail
-4. Real unit economics measured, not estimated
-5. Support staffing
+Each of those costs us real money per use, which is what makes a price
+defensible. A local feature that costs us nothing will stay free.
 
-That is a different product with a different cost structure. Not a price change.
+## Licence
 
-## Refunds
-
-Month-to-month. If the tool does not do what this document says it does,
-it is refunded in full, no questions. See `COMMERCIAL_TERMS.md`.
-
-## Development funding
-
-The free tier exists because the paid tier is honest about what it sells.
-If Pro never sells, the free tier still ships — it is AGPL and the source
-is public. Money buys convenience, not access.
+AGPL-3.0-or-later. Commercial licensing is available for closed-source use —
+see `COMMERCIAL_TERMS.md`. That is about **legal usage rights**, not feature
+access. You never need to pay to unlock a capability.
