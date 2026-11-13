@@ -6,6 +6,26 @@ All notable changes to this project. Format based on
 
 ---
 
+## [1.0.0] — 2026-11-14
+
+First stable release. Version number aligned with the software copyright
+registration filing (V1.0) so the registered version and the published
+package refer to the same thing.
+
+### Changed
+
+- No functional changes from 0.1.0. This release only bumps the version and
+  records the 1.0 status: the free tier is complete, tested, and shipped.
+- `ctx_consensus` remains free (since 0.1.0's 2026-11-03 change).
+
+### Notes
+
+- Copyright registration filed as "本地优先AI智能体记忆与输出校验软件 V1.0"
+  by 北京镁司科技有限公司.
+- 64 tests green; clean-install matrix green.
+
+---
+
 ## [Unreleased]
 
 ### Not yet done — blocks any paid launch

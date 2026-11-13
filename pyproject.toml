@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "meshctx-ctxkit"
-version = "0.1.0"
+version = "1.0.0"
 description = "Local-first context kit for agents: memory that survives restarts + verified multi-model consensus. Runs fully offline, zero login, zero API spend."
 readme = "README.md"
 requires-python = ">=3.10"

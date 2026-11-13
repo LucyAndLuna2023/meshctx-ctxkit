@@ -13,5 +13,5 @@ runs (memory works fully offline; consensus returns a clear, actionable
 error instead of crashing).
 """
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 __all__ = ["__version__"]
